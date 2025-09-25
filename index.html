@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Състезание между госпожи Радева и Цонева</title>
+    <title>Състезание Госпожи Радева и Цонева</title>
     <style>
         * {
             margin: 0;
@@ -22,7 +22,7 @@
         }
         
         .container {
-            background-color: rgba(255, 255, 255, 0.95);
+            background-color: white;
             border-radius: 20px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             width: 100%;
@@ -52,7 +52,7 @@
         }
         
         .competitor {
-            background: white;
+            background: #f8f9fa;
             border-radius: 15px;
             padding: 25px;
             width: 100%;
@@ -76,7 +76,6 @@
             font-weight: bold;
             color: #3498db;
             margin: 20px 0;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
         }
         
         .btn {
@@ -88,17 +87,11 @@
             border-radius: 50px;
             cursor: pointer;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
             margin-top: 10px;
         }
         
         .btn:hover {
             transform: scale(1.05);
-            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
-        }
-        
-        .btn:active {
-            transform: scale(0.98);
         }
         
         .btn-reset {
@@ -110,13 +103,11 @@
             border-radius: 15px;
             padding: 20px;
             margin-top: 20px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
         }
         
         .results h3 {
             color: #2c3e50;
             margin-bottom: 15px;
-            font-size: 1.5rem;
         }
         
         .result-text {
@@ -127,6 +118,7 @@
         
         .leader {
             border: 3px solid #f1c40f;
+            background: #fff9c4;
             position: relative;
         }
         
@@ -140,13 +132,12 @@
             padding: 5px 10px;
             border-radius: 10px;
             font-weight: bold;
-            font-size: 0.9rem;
         }
         
-        .connection-status {
-            margin-top: 15px;
+        .status {
             padding: 10px;
             border-radius: 5px;
+            margin: 10px 0;
             font-weight: bold;
         }
         
@@ -155,206 +146,143 @@
             color: #155724;
         }
         
-        .disconnected {
+        .error {
             background-color: #f8d7da;
             color: #721c24;
         }
-        
-        .last-update {
-            font-size: 0.9rem;
-            color: #6c757d;
-            margin-top: 10px;
-        }
-        
-        @media (max-width: 768px) {
-            .competitors {
-                flex-direction: column;
-                align-items: center;
-            }
-            
-            .competitor {
-                width: 100%;
-            }
-            
-            h1 {
-                font-size: 2rem;
-            }
-        }
     </style>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </head>
 <body>
     <div class="container">
         <h1>Състезание "Казаха Госпожо"</h1>
-        <p class="subtitle">Г-жа Радева срещу Г-жа Цонева - В РЕАЛНО ВРЕМЕ</p>
+        <p class="subtitle">Г-жа Радева vs Г-жа Цонева - В РЕАЛНО ВРЕМЕ</p>
         
-        <div class="connection-status" id="connection-status">Зареждане на данните...</div>
+        <div class="status" id="status">🔄 Свързване с Firebase...</div>
         
         <div class="competitors">
             <div class="competitor" id="radeva">
                 <h2>Г-жа Радева</h2>
                 <div class="counter" id="radeva-counter">0</div>
-                <button class="btn" onclick="incrementCounter('radeva')">Казаха Госпожо +1</button>
+                <button class="btn" onclick="addPoint('radeva')">Казаха Госпожо +1</button>
             </div>
             
             <div class="competitor" id="tsoneva">
                 <h2>Г-жа Цонева</h2>
                 <div class="counter" id="tsoneva-counter">0</div>
-                <button class="btn" onclick="incrementCounter('tsoneva')">Казаха Госпожо +1</button>
+                <button class="btn" onclick="addPoint('tsoneva')">Казаха Госпожо +1</button>
             </div>
         </div>
         
         <div class="results">
-            <h3>Текущо състояние на състезанието</h3>
+            <h3>Текущо състояние</h3>
             <div class="result-text" id="result-text">Зареждане...</div>
-            <div class="last-update" id="last-update"></div>
-            <button class="btn btn-reset" onclick="resetCounters()">Нулирай резултатите</button>
+            <button class="btn btn-reset" onclick="resetScores()">Нулирай резултатите</button>
         </div>
     </div>
 
     <script>
-        // Глобални променливи за резултатите
-        let radevaCount = 0;
-        let tsonevaCount = 0;
-        let lastUpdate = null;
-        
-        // Функция за симулиране на сървърно запазване (в реална ситуация това ще е AJAX заявка)
-        function saveToServer(teacher) {
-            // Запазване в localStorage като симулация на сървър
-            if (teacher === 'radeva') {
-                localStorage.setItem('server_radeva', radevaCount);
-            } else if (teacher === 'tsoneva') {
-                localStorage.setItem('server_tsoneva', tsonevaCount);
+        // Вашата Firebase конфигурация
+        const firebaseConfig = {
+            apiKey: "AIzaSyCr3fMjIV_wFhkD0AiWs2e_O6IKcsKfnfQ",
+            authDomain: "gospogho-counter.firebaseapp.com",
+            databaseURL: "https://gospogho-counter-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "gospogho-counter",
+            storageBucket: "gospogho-counter.firebasestorage.app",
+            messagingSenderId: "498181065339",
+            appId: "1:498181065339:web:585cd8ce951d1f46dff0de",
+            measurementId: "G-339XR9LYEZ"
+        };
+
+        // Инициализация на Firebase
+        let database;
+        try {
+            firebase.initializeApp(firebaseConfig);
+            database = firebase.database();
+            document.getElementById('status').className = 'status connected';
+            document.getElementById('status').textContent = '✅ Свързан с Firebase! Всички устройства виждат едни и същи резултати.';
+        } catch (error) {
+            document.getElementById('status').className = 'status error';
+            document.getElementById('status').textContent = '❌ Грешка при свързване: ' + error.message;
+        }
+
+        // Референции към базата данни
+        const scoresRef = database.ref('scores');
+
+        // Слушател за промени в реално време
+        scoresRef.on('value', (snapshot) => {
+            const data = snapshot.val() || { radeva: 0, tsoneva: 0 };
+            
+            // Обновяване на броячите
+            document.getElementById('radeva-counter').textContent = data.radeva || 0;
+            document.getElementById('tsoneva-counter').textContent = data.tsoneva || 0;
+            
+            // Обновяване на резултатите
+            updateResults(data.radeva || 0, data.tsoneva || 0);
+            
+            // Обновяване на лидера
+            updateLeader(data.radeva || 0, data.tsoneva || 0);
+        });
+
+        // Функция за добавяне на точка
+        function addPoint(teacher) {
+            if (!database) {
+                alert('Firebase не е инициализиран!');
+                return;
             }
             
-            // Записваме времето на последна промяна
-            localStorage.setItem('last_server_update', new Date().toISOString());
+            const teacherRef = database.ref('scores/' + teacher);
             
-            updateConnectionStatus(true);
+            // Използваме transaction за да избегнем конфликти
+            teacherRef.transaction((currentValue) => {
+                return (currentValue || 0) + 1;
+            });
         }
-        
-        // Функция за зареждане на данни от "сървъра"
-        function loadFromServer() {
-            radevaCount = parseInt(localStorage.getItem('server_radeva') || '0');
-            tsonevaCount = parseInt(localStorage.getItem('server_tsoneva') || '0');
-            lastUpdate = localStorage.getItem('last_server_update');
-            
-            updateDisplay();
-            updateConnectionStatus(true);
-        }
-        
-        // Функция за обновяване на състоянието на връзката
-        function updateConnectionStatus(connected) {
-            const statusElement = document.getElementById('connection-status');
-            if (connected) {
-                statusElement.textContent = '✓ Всички устройства виждат едни и същи резултати в реално време';
-                statusElement.className = 'connection-status connected';
-            } else {
-                statusElement.textContent = '✗ Няма връзка със сървъра';
-                statusElement.className = 'connection-status disconnected';
+
+        // Функция за нулиране на резултатите
+        function resetScores() {
+            if (confirm('Сигурни ли сте, че искате да нулирате резултатите за всички устройства?')) {
+                scoresRef.set({
+                    radeva: 0,
+                    tsoneva: 0
+                });
             }
         }
-        
-        // Функция за обновяване на всички показвани елементи
-        function updateDisplay() {
-            document.getElementById('radeva-counter').textContent = radevaCount;
-            document.getElementById('tsoneva-counter').textContent = tsonevaCount;
-            updateResults();
-            updateLeader();
-            updateLastUpdateTime();
-        }
-        
+
         // Функция за обновяване на резултатите
-        function updateResults() {
-            const resultText = document.getElementById('result-text');
+        function updateResults(radeva, tsoneva) {
+            const resultElement = document.getElementById('result-text');
             
-            if (radevaCount === 0 && tsonevaCount === 0) {
-                resultText.textContent = 'Състезанието все още не е започнало';
-            } else if (radevaCount > tsonevaCount) {
-                resultText.textContent = `Г-жа Радева води с ${radevaCount - tsonevaCount} точки`;
-            } else if (tsonevaCount > radevaCount) {
-                resultText.textContent = `Г-жа Цонева води с ${tsonevaCount - radevaCount} точки`;
+            if (radeva === 0 && tsoneva === 0) {
+                resultElement.textContent = 'Състезанието още не е започнало';
+            } else if (radeva > tsoneva) {
+                resultElement.textContent = `Г-жа Радева води с ${radeva - tsoneva} точки`;
+            } else if (tsoneva > radeva) {
+                resultElement.textContent = `Г-жа Цонева води с ${tsoneva - radeva} точки`;
             } else {
-                resultText.textContent = 'Равнище! И двете госпожи имат еднакъв брой точки';
+                resultElement.textContent = 'Равнище! И двете имат еднакъв брой точки';
             }
         }
-        
+
         // Функция за обновяване на лидера
-        function updateLeader() {
+        function updateLeader(radeva, tsoneva) {
             const radevaElement = document.getElementById('radeva');
             const tsonevaElement = document.getElementById('tsoneva');
             
-            // Премахване на лидер класа от двата елемента
+            // Премахване на лидер класа
             radevaElement.classList.remove('leader');
             tsonevaElement.classList.remove('leader');
             
-            // Добавяне на лидер класа към този с по-висок резултат
-            if (radevaCount > tsonevaCount) {
+            // Добавяне на лидер класа
+            if (radeva > tsoneva) {
                 radevaElement.classList.add('leader');
-            } else if (tsonevaCount > radevaCount) {
+            } else if (tsoneva > radeva) {
                 tsonevaElement.classList.add('leader');
             }
         }
-        
-        // Функция за обновяване на времето на последна промяна
-        function updateLastUpdateTime() {
-            const lastUpdateElement = document.getElementById('last-update');
-            if (lastUpdate) {
-                const updateTime = new Date(lastUpdate);
-                lastUpdateElement.textContent = `Последна промяна: ${updateTime.toLocaleString('bg-BG')}`;
-            } else {
-                lastUpdateElement.textContent = 'Все още няма промени';
-            }
-        }
-        
-        // Основна функция за увеличаване на брояча
-        function incrementCounter(teacher) {
-            if (teacher === 'radeva') {
-                radevaCount++;
-            } else if (teacher === 'tsoneva') {
-                tsonevaCount++;
-            }
-            
-            // Запазване в "сървъра" и обновяване на дисплея
-            saveToServer(teacher);
-            updateDisplay();
-            
-            // Симулиране на обновяване на другите устройства
-            setTimeout(checkForUpdates, 100);
-        }
-        
-        // Функция за нулиране на резултатите
-        function resetCounters() {
-            if (confirm("Сигурни ли сте, че искате да нулирате резултатите за всички устройства?")) {
-                radevaCount = 0;
-                tsonevaCount = 0;
-                
-                // Запазване на нулираните стойности в "сървъра"
-                localStorage.setItem('server_radeva', '0');
-                localStorage.setItem('server_tsoneva', '0');
-                localStorage.setItem('last_server_update', new Date().toISOString());
-                
-                updateDisplay();
-                updateConnectionStatus(true);
-            }
-        }
-        
-        // Функция за проверка за обновения от други устройства
-        function checkForUpdates() {
-            const lastServerUpdate = localStorage.getItem('last_server_update');
-            
-            // Ако има по-нова промяна от другаде, зареждаме новите данни
-            if (!lastUpdate || (lastServerUpdate && lastServerUpdate > lastUpdate)) {
-                loadFromServer();
-            }
-        }
-        
-        // Инициализация при зареждане на страницата
-        document.addEventListener('DOMContentLoaded', function() {
-            loadFromServer();
-            
-            // Проверка за обновявания на всеки 2 секунди
-            setInterval(checkForUpdates, 2000);
-        });
     </script>
 </body>
 </html>
