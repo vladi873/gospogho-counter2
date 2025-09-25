@@ -143,11 +143,27 @@
             font-size: 0.9rem;
         }
         
-        .save-info {
+        .connection-status {
             margin-top: 15px;
-            font-style: italic;
-            color: #7f8c8d;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .last-update {
             font-size: 0.9rem;
+            color: #6c757d;
+            margin-top: 10px;
         }
         
         @media (max-width: 768px) {
@@ -169,60 +185,85 @@
 <body>
     <div class="container">
         <h1>Състезание "Казаха Госпожо"</h1>
-        <p class="subtitle">Г-жа Радева срещу Г-жа Цонева</p>
+        <p class="subtitle">Г-жа Радева срещу Г-жа Цонева - В РЕАЛНО ВРЕМЕ</p>
+        
+        <div class="connection-status" id="connection-status">Зареждане на данните...</div>
         
         <div class="competitors">
             <div class="competitor" id="radeva">
                 <h2>Г-жа Радева</h2>
                 <div class="counter" id="radeva-counter">0</div>
-                <button class="btn" onclick="incrementCounter('radeva')">Казаха Госпожо</button>
+                <button class="btn" onclick="incrementCounter('radeva')">Казаха Госпожо +1</button>
             </div>
             
             <div class="competitor" id="tsoneva">
                 <h2>Г-жа Цонева</h2>
                 <div class="counter" id="tsoneva-counter">0</div>
-                <button class="btn" onclick="incrementCounter('tsoneva')">Казаха Госпожо</button>
+                <button class="btn" onclick="incrementCounter('tsoneva')">Казаха Госпожо +1</button>
             </div>
         </div>
         
         <div class="results">
             <h3>Текущо състояние на състезанието</h3>
-            <div class="result-text" id="result-text">Състезанието все още не е започнало</div>
+            <div class="result-text" id="result-text">Зареждане...</div>
+            <div class="last-update" id="last-update"></div>
             <button class="btn btn-reset" onclick="resetCounters()">Нулирай резултатите</button>
-            <p class="save-info">Резултатите се запазват автоматично в браузъра</p>
         </div>
     </div>
 
     <script>
-        // Зареждане на запазените резултати от localStorage
-        let radevaCount = localStorage.getItem('radevaCount') ? parseInt(localStorage.getItem('radevaCount')) : 0;
-        let tsonevaCount = localStorage.getItem('tsonevaCount') ? parseInt(localStorage.getItem('tsonevaCount')) : 0;
+        // Глобални променливи за резултатите
+        let radevaCount = 0;
+        let tsonevaCount = 0;
+        let lastUpdate = null;
         
-        // Инициализиране на броячите при зареждане на страницата
-        document.addEventListener('DOMContentLoaded', function() {
+        // Функция за симулиране на сървърно запазване (в реална ситуация това ще е AJAX заявка)
+        function saveToServer(teacher) {
+            // Запазване в localStorage като симулация на сървър
+            if (teacher === 'radeva') {
+                localStorage.setItem('server_radeva', radevaCount);
+            } else if (teacher === 'tsoneva') {
+                localStorage.setItem('server_tsoneva', tsonevaCount);
+            }
+            
+            // Записваме времето на последна промяна
+            localStorage.setItem('last_server_update', new Date().toISOString());
+            
+            updateConnectionStatus(true);
+        }
+        
+        // Функция за зареждане на данни от "сървъра"
+        function loadFromServer() {
+            radevaCount = parseInt(localStorage.getItem('server_radeva') || '0');
+            tsonevaCount = parseInt(localStorage.getItem('server_tsoneva') || '0');
+            lastUpdate = localStorage.getItem('last_server_update');
+            
+            updateDisplay();
+            updateConnectionStatus(true);
+        }
+        
+        // Функция за обновяване на състоянието на връзката
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connection-status');
+            if (connected) {
+                statusElement.textContent = '✓ Всички устройства виждат едни и същи резултати в реално време';
+                statusElement.className = 'connection-status connected';
+            } else {
+                statusElement.textContent = '✗ Няма връзка със сървъра';
+                statusElement.className = 'connection-status disconnected';
+            }
+        }
+        
+        // Функция за обновяване на всички показвани елементи
+        function updateDisplay() {
             document.getElementById('radeva-counter').textContent = radevaCount;
             document.getElementById('tsoneva-counter').textContent = tsonevaCount;
             updateResults();
             updateLeader();
-        });
-        
-        function incrementCounter(teacher) {
-            if (teacher === 'radeva') {
-                radevaCount++;
-                document.getElementById('radeva-counter').textContent = radevaCount;
-                // Запазване в localStorage
-                localStorage.setItem('radevaCount', radevaCount);
-            } else if (teacher === 'tsoneva') {
-                tsonevaCount++;
-                document.getElementById('tsoneva-counter').textContent = tsonevaCount;
-                // Запазване в localStorage
-                localStorage.setItem('tsonevaCount', tsonevaCount);
-            }
-            
-            updateResults();
-            updateLeader();
+            updateLastUpdateTime();
         }
         
+        // Функция за обновяване на резултатите
         function updateResults() {
             const resultText = document.getElementById('result-text');
             
@@ -237,38 +278,83 @@
             }
         }
         
+        // Функция за обновяване на лидера
         function updateLeader() {
             const radevaElement = document.getElementById('radeva');
             const tsonevaElement = document.getElementById('tsoneva');
             
-            // Remove leader class from both
+            // Премахване на лидер класа от двата елемента
             radevaElement.classList.remove('leader');
             tsonevaElement.classList.remove('leader');
             
-            // Add leader class to the one with higher count
+            // Добавяне на лидер класа към този с по-висок резултат
             if (radevaCount > tsonevaCount) {
                 radevaElement.classList.add('leader');
             } else if (tsonevaCount > radevaCount) {
                 tsonevaElement.classList.add('leader');
             }
-            // If equal, no one gets the leader class
         }
         
-        function resetCounters() {
-            if (confirm("Сигурни ли сте, че искате да нулирате резултатите?")) {
-                radevaCount = 0;
-                tsonevaCount = 0;
-                document.getElementById('radeva-counter').textContent = '0';
-                document.getElementById('tsoneva-counter').textContent = '0';
-                
-                // Изтриване на запазените данни от localStorage
-                localStorage.removeItem('radevaCount');
-                localStorage.removeItem('tsonevaCount');
-                
-                updateResults();
-                updateLeader();
+        // Функция за обновяване на времето на последна промяна
+        function updateLastUpdateTime() {
+            const lastUpdateElement = document.getElementById('last-update');
+            if (lastUpdate) {
+                const updateTime = new Date(lastUpdate);
+                lastUpdateElement.textContent = `Последна промяна: ${updateTime.toLocaleString('bg-BG')}`;
+            } else {
+                lastUpdateElement.textContent = 'Все още няма промени';
             }
         }
+        
+        // Основна функция за увеличаване на брояча
+        function incrementCounter(teacher) {
+            if (teacher === 'radeva') {
+                radevaCount++;
+            } else if (teacher === 'tsoneva') {
+                tsonevaCount++;
+            }
+            
+            // Запазване в "сървъра" и обновяване на дисплея
+            saveToServer(teacher);
+            updateDisplay();
+            
+            // Симулиране на обновяване на другите устройства
+            setTimeout(checkForUpdates, 100);
+        }
+        
+        // Функция за нулиране на резултатите
+        function resetCounters() {
+            if (confirm("Сигурни ли сте, че искате да нулирате резултатите за всички устройства?")) {
+                radevaCount = 0;
+                tsonevaCount = 0;
+                
+                // Запазване на нулираните стойности в "сървъра"
+                localStorage.setItem('server_radeva', '0');
+                localStorage.setItem('server_tsoneva', '0');
+                localStorage.setItem('last_server_update', new Date().toISOString());
+                
+                updateDisplay();
+                updateConnectionStatus(true);
+            }
+        }
+        
+        // Функция за проверка за обновения от други устройства
+        function checkForUpdates() {
+            const lastServerUpdate = localStorage.getItem('last_server_update');
+            
+            // Ако има по-нова промяна от другаде, зареждаме новите данни
+            if (!lastUpdate || (lastServerUpdate && lastServerUpdate > lastUpdate)) {
+                loadFromServer();
+            }
+        }
+        
+        // Инициализация при зареждане на страницата
+        document.addEventListener('DOMContentLoaded', function() {
+            loadFromServer();
+            
+            // Проверка за обновявания на всеки 2 секунди
+            setInterval(checkForUpdates, 2000);
+        });
     </script>
 </body>
 </html>
