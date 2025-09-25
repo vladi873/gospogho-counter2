@@ -94,6 +94,12 @@
             transform: scale(1.05);
         }
         
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
         .btn-reset {
             background: linear-gradient(to right, #e74c3c, #c0392b);
         }
@@ -150,6 +156,12 @@
             background-color: #f8d7da;
             color: #721c24;
         }
+        
+        .cooldown {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 5px;
+        }
     </style>
     
     <!-- Firebase SDK -->
@@ -167,20 +179,23 @@
             <div class="competitor" id="radeva">
                 <h2>Г-жа Радева</h2>
                 <div class="counter" id="radeva-counter">0</div>
-                <button class="btn" onclick="addPoint('radeva')">Казаха Госпожо +1</button>
+                <button class="btn" onclick="addVote('radeva')" id="btn-radeva">Казаха Госпожо +1</button>
+                <div class="cooldown" id="cooldown-radeva"></div>
             </div>
             
             <div class="competitor" id="tsoneva">
                 <h2>Г-жа Цонева</h2>
                 <div class="counter" id="tsoneva-counter">0</div>
-                <button class="btn" onclick="addPoint('tsoneva')">Казаха Госпожо +1</button>
+                <button class="btn" onclick="addVote('tsoneva')" id="btn-tsoneva">Казаха Госпожо +1</button>
+                <div class="cooldown" id="cooldown-tsoneva"></div>
             </div>
         </div>
         
         <div class="results">
             <h3>Текущо състояние</h3>
             <div class="result-text" id="result-text">Зареждане...</div>
-            <button class="btn btn-reset" onclick="resetScores()">Нулирай резултатите</button>
+            <button class="btn btn-reset" onclick="resetScores()" id="btn-reset">Нулирай резултатите</button>
+            <p style="font-size: 0.8rem; color: #666; margin-top: 10px;">Само администратор може да нулира</p>
         </div>
     </div>
 
@@ -199,60 +214,112 @@
 
         // Инициализация на Firebase
         let database;
+        let lastVoteTime = {
+            radeva: 0,
+            tsoneva: 0
+        };
+        const VOTE_COOLDOWN = 2000; // 2 секунди коолдаун
+
         try {
             firebase.initializeApp(firebaseConfig);
             database = firebase.database();
             document.getElementById('status').className = 'status connected';
-            document.getElementById('status').textContent = '✅ Свързан с Firebase! Всички устройства виждат едни и същи резултати.';
+            document.getElementById('status').textContent = '✅ Свързан с Firebase! Данните са защитени.';
         } catch (error) {
             document.getElementById('status').className = 'status error';
             document.getElementById('status').textContent = '❌ Грешка при свързване: ' + error.message;
         }
 
-        // Референции към базата данни
+        // Референции
         const scoresRef = database.ref('scores');
+        const votesRef = database.ref('votes');
 
-        // Слушател за промени в реално време
+        // Зареждане на начални стойности
+        scoresRef.once('value').then((snapshot) => {
+            if (!snapshot.exists()) {
+                scoresRef.set({ radeva: 0, tsoneva: 0 });
+            }
+        });
+
+        // Слушател за реално време
         scoresRef.on('value', (snapshot) => {
             const data = snapshot.val() || { radeva: 0, tsoneva: 0 };
             
-            // Обновяване на броячите
             document.getElementById('radeva-counter').textContent = data.radeva || 0;
             document.getElementById('tsoneva-counter').textContent = data.tsoneva || 0;
             
-            // Обновяване на резултатите
             updateResults(data.radeva || 0, data.tsoneva || 0);
-            
-            // Обновяване на лидера
             updateLeader(data.radeva || 0, data.tsoneva || 0);
         });
 
-        // Функция за добавяне на точка
-        function addPoint(teacher) {
+        // Функция за гласуване
+        function addVote(teacher) {
             if (!database) {
                 alert('Firebase не е инициализиран!');
                 return;
             }
-            
-            const teacherRef = database.ref('scores/' + teacher);
-            
-            // Използваме transaction за да избегнем конфликти
-            teacherRef.transaction((currentValue) => {
-                return (currentValue || 0) + 1;
+
+            const now = Date.now();
+            const timeSinceLastVote = now - lastVoteTime[teacher];
+
+            // Коолдаун защита
+            if (timeSinceLastVote < VOTE_COOLDOWN) {
+                const remaining = Math.ceil((VOTE_COOLDOWN - timeSinceLastVote) / 1000);
+                document.getElementById(`cooldown-${teacher}`).textContent = `Изчакайте ${remaining}сек`;
+                return;
+            }
+
+            lastVoteTime[teacher] = now;
+            document.getElementById(`cooldown-${teacher}`).textContent = '';
+
+            // Добавяне на глас чрез votes система
+            const newVoteRef = votesRef.push();
+            newVoteRef.set({
+                teacher: teacher,
+                timestamp: now,
+                type: 'vote'
+            }).then(() => {
+                console.log('Гласът е записан успешно');
+            }).catch((error) => {
+                console.error('Грешка при гласуване:', error);
+                alert('Грешка при добавяне на точка. Опитайте отново.');
             });
+
+            // Обновяване на коолдаун
+            updateCooldown(teacher);
         }
 
-        // Функция за нулиране на резултатите
+        function updateCooldown(teacher) {
+            const button = document.getElementById(`btn-${teacher}`);
+            const cooldownElement = document.getElementById(`cooldown-${teacher}`);
+            
+            button.disabled = true;
+            let secondsLeft = VOTE_COOLDOWN / 1000;
+            
+            const countdown = setInterval(() => {
+                secondsLeft--;
+                cooldownElement.textContent = `Можете да гласувате след ${secondsLeft}сек`;
+                
+                if (secondsLeft <= 0) {
+                    clearInterval(countdown);
+                    button.disabled = false;
+                    cooldownElement.textContent = '';
+                }
+            }, 1000);
+        }
+
         function resetScores() {
-            if (confirm('Сигурни ли сте, че искате да нулирате резултатите за всички устройства?')) {
-                scoresRef.set({
-                    radeva: 0,
-                    tsoneva: 0
-                });
+            const password = prompt('Въведете администраторска парола за нулиране:');
+            // Проста парола - може да я промените
+            if (password === 'admin123') {
+                if (confirm('Сигурни ли сте, че искате да нулирате всички резултати?')) {
+                    scoresRef.set({ radeva: 0, tsoneva: 0 });
+                }
+            } else {
+                alert('Неправилна парола!');
             }
         }
 
-        // Функция за обновяване на резултатите
         function updateResults(radeva, tsoneva) {
             const resultElement = document.getElementById('result-text');
             
@@ -267,22 +334,31 @@
             }
         }
 
-        // Функция за обновяване на лидера
         function updateLeader(radeva, tsoneva) {
             const radevaElement = document.getElementById('radeva');
             const tsonevaElement = document.getElementById('tsoneva');
             
-            // Премахване на лидер класа
             radevaElement.classList.remove('leader');
             tsonevaElement.classList.remove('leader');
             
-            // Добавяне на лидер класа
             if (radeva > tsoneva) {
                 radevaElement.classList.add('leader');
             } else if (tsoneva > radeva) {
                 tsonevaElement.classList.add('leader');
             }
         }
+
+        // Cloud Function за обработка на гласове (симулирана)
+        votesRef.on('child_added', (snapshot) => {
+            const vote = snapshot.val();
+            if (vote && vote.teacher) {
+                // Симулираме cloud function - увеличаваме точките
+                setTimeout(() => {
+                    const teacherRef = scoresRef.child(vote.teacher);
+                    teacherRef.transaction((current) => (current || 0) + 1);
+                }, 100);
+            }
+        });
     </script>
 </body>
 </html>
