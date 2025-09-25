@@ -171,9 +171,9 @@
 <body>
     <div class="container">
         <h1>Състезание "Казаха Госпожо"</h1>
-        <p class="subtitle">Г-жа Радева vs Г-жа Цонева - В РЕАЛНО ВРЕМЕ</p>
+        <p class="subtitle">Г-жа Радева vs Г-жа Цонеva - В РЕАЛНО ВРЕМЕ</p>
         
-        <div class="status" id="status">🔄 Свързване с Firebase...</div>
+        <div class="status" id="status">🔄 Свързване със сървъра...</div>
         
         <div class="competitors">
             <div class="competitor" id="radeva">
@@ -224,7 +224,7 @@
             firebase.initializeApp(firebaseConfig);
             database = firebase.database();
             document.getElementById('status').className = 'status connected';
-            document.getElementById('status').textContent = '✅ Свързан .';
+            document.getElementById('status').textContent = '✅ Свързан със сървъра!';
         } catch (error) {
             document.getElementById('status').className = 'status error';
             document.getElementById('status').textContent = '❌ Грешка при свързване: ' + error.message;
@@ -232,7 +232,6 @@
 
         // Референции
         const scoresRef = database.ref('scores');
-        const votesRef = database.ref('votes');
 
         // Зареждане на начални стойности
         scoresRef.once('value').then((snapshot) => {
@@ -252,7 +251,7 @@
             updateLeader(data.radeva || 0, data.tsoneva || 0);
         });
 
-        // Функция за гласуване
+        // Функция за гласуване - САМО ЕДИН МЕХАНИЗМ СЕГА!
         function addVote(teacher) {
             if (!database) {
                 alert('Firebase не е инициализиран!');
@@ -270,23 +269,20 @@
             }
 
             lastVoteTime[teacher] = now;
-            document.getElementById(`cooldown-${teacher}`).textContent = '';
 
-            // Добавяне на глас чрез votes система
-            const newVoteRef = votesRef.push();
-            newVoteRef.set({
-                teacher: teacher,
-                timestamp: now,
-                type: 'vote'
-            }).then(() => {
-                console.log('Гласът е записан успешно');
+            // САМО ЕДНА ТОЧКА СЕ ДОБАВЯ - директно към scores
+            const teacherRef = scoresRef.child(teacher);
+            teacherRef.transaction((currentValue) => {
+                return (currentValue || 0) + 1;
+            }).then((result) => {
+                if (result.committed) {
+                    console.log('Точката е добавена успешно за ' + teacher);
+                    updateCooldown(teacher);
+                }
             }).catch((error) => {
-                console.error('Грешка при гласуване:', error);
+                console.error('Грешка при добавяне на точка:', error);
                 alert('Грешка при добавяне на точка. Опитайте отново.');
             });
-
-            // Обновяване на коолдаун
-            updateCooldown(teacher);
         }
 
         function updateCooldown(teacher) {
@@ -310,7 +306,6 @@
 
         function resetScores() {
             const password = prompt('Въведете администраторска парола за нулиране:');
-            // Проста парола - може да я промените
             if (password === 'Vladislav2009p.') {
                 if (confirm('Сигурни ли сте, че искате да нулирате всички резултати?')) {
                     scoresRef.set({ radeva: 0, tsoneva: 0 });
@@ -348,17 +343,7 @@
             }
         }
 
-        // Cloud Function за обработка на гласове (симулирана)
-        votesRef.on('child_added', (snapshot) => {
-            const vote = snapshot.val();
-            if (vote && vote.teacher) {
-                // Симулираме cloud function - увеличаваме точките
-                setTimeout(() => {
-                    const teacherRef = scoresRef.child(vote.teacher);
-                    teacherRef.transaction((current) => (current || 0));
-                }, 100);
-            }
-        });
+        // ПРЕМАХНАТ е излишният listener за votes
     </script>
 </body>
 </html>
